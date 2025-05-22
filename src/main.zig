@@ -18,14 +18,23 @@ pub fn main() !void {
     defer arena.deinit();
     const allocator = arena.allocator();
 
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
+    const args = try std.process.argsAlloc(gpa.allocator());
+    defer std.process.argsFree(gpa.allocator(), args);
+
+    const input = try flags.parser(args);
+
     var cfg: SensorCfg = undefined;
     const data = try SensorData.init(allocator);
 
-    cfg.addr = try std.net.Address.resolveIp("127.0.0.1", 7200);
+    cfg.addr = try std.net.Address.resolveIp(input.positional.addr, input.positional.port);
     cfg.verbose = true;
 
     try sendToSensor(allocator, cfg, data);
 
+    try sendToSensor(allocator, cfg, data);
 }
 
 const SensorData = struct {
@@ -52,6 +61,7 @@ const SensorCfg = struct {
 
 
 const std = @import("std");
+const flags = @import("flags.zig");
 const posix = std.posix;
 const net = std.net;
 const time = std.time;
