@@ -1,9 +1,15 @@
+/// Appends a new line ('\n') to the String (str) and returns a new string
+/// allocation.
 fn appendNewLine(allocator: Allocator, str: []u8) ![]u8 {
     var buf: [100]u8 = undefined;
     const fmt = try std.fmt.bufPrint(buf[0..], "{s}\n", .{str});
     return allocator.dupe(u8, fmt);
 }
 
+/// Sends SensorData (data) with either TCP or UDP dependent on SensorCfg (cfg).
+///
+/// The information is sent as a json-string that is terminated by
+/// a new line ('\n') character.
 fn sendToSensor(allocator: Allocator, cfg: SensorCfg, data: *SensorData) !void {
     const json_data = try std.json.stringifyAlloc(allocator, data, .{ .escape_unicode = false });
     const message = try appendNewLine(allocator, json_data);
@@ -18,11 +24,19 @@ fn sendToSensor(allocator: Allocator, cfg: SensorCfg, data: *SensorData) !void {
         try posix.connect(sockfd, &cfg.addr.any, cfg.addr.getOsSockLen());
         send_bytes = try posix.send(sockfd, message, 0);
     } else {
-        const stream = try net.tcpConnectToAddress(cfg.addr);
-        defer stream.close();
+        const sockfd = try posix.socket(posix.AF.INET, posix.SOCK.STREAM, posix.IPPROTO.TCP);
+        defer posix.close(sockfd);
 
-        var writer = stream.writer();
-        send_bytes = try writer.write(message);
+        try posix.connect(sockfd, &cfg.addr.any, cfg.addr.getOsSockLen());
+
+        send_bytes = try posix.write(sockfd, message);
+
+        var buf: [1024]u8 = undefined;
+        const rcv_bytes = try posix.read(sockfd, &buf);
+        if (cfg.verbose) {
+            std.log.info("{d}: rcv_bytes={d}", .{ time.milliTimestamp(), rcv_bytes });
+            std.log.debug("rcv: {s}", .{buf});
+        }
     }
 
     if (cfg.verbose) {
@@ -43,9 +57,14 @@ pub fn main() !void {
     var cfg: SensorCfg = undefined;
     const data = try SensorData.init(allocator);
 
-    data.sensor_data.temp = input.temp * 0;
+    // -nographic --machine pc-i440fx-4.2 -fw_cfg name=opt/id,string=6103E -chardev socket,id=weosctl,host=localhost,port=4444,server=on,wait=off -device pci-serial,chardev=weosctl
+
+    data.sensor_data.temp = input.temp;
+    if (input.verbose) std.log.debug("input.temp: {d}", .{input.temp});
     data.sensor_data.pwr1 = input.pwr1;
+    if (input.verbose) std.log.debug("input.pwr1: {d}", .{input.pwr1});
     data.sensor_data.pwr2 = input.pwr2;
+    if (input.verbose) std.log.debug("input.pwr2: {d}", .{input.pwr2});
 
     cfg.addr = try std.net.Address.resolveIp(input.positional.addr, input.positional.port);
     if (input.udp) {
@@ -67,9 +86,9 @@ const SensorData = struct {
     sensor_data: Sensors,
 
     const Sensors = struct {
-        temp: u64 = 0,
-        pwr1: u64 = 0,
-        pwr2: u64 = 0,
+        temp: u64 = undefined,
+        pwr1: u64 = undefined,
+        pwr2: u64 = undefined,
     };
 
     fn init(allocator: Allocator) !*SensorData {
