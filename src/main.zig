@@ -43,7 +43,7 @@ pub fn main() !void {
     var cfg: SensorCfg = undefined;
     const data = try SensorData.init(allocator);
 
-    data.sensor_data.temp = input.temp * 10;
+    data.sensor_data.temp = input.temp * 1000;
     data.sensor_data.pwr1 = input.pwr1;
     data.sensor_data.pwr2 = input.pwr2;
 
