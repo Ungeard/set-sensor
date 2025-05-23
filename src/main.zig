@@ -4,10 +4,9 @@ const Proto = enum {
 };
 
 fn sendToSensor(allocator: Allocator, cfg: SensorCfg, data: *SensorData) !void {
-    const message = try std.json.stringifyAlloc(allocator, data, .{});
+    const message = try std.json.stringifyAlloc(allocator, data, .{ .escape_unicode = false });
 
     var send_bytes: usize = undefined;
-    var rcv_bytes: usize = undefined;
 
     if (cfg.proto == Proto.udp) {
         const sockfd = try posix.socket(posix.AF.INET, posix.SOCK.DGRAM | posix.SOCK.CLOEXEC, 0);
@@ -19,18 +18,12 @@ fn sendToSensor(allocator: Allocator, cfg: SensorCfg, data: *SensorData) !void {
         const stream = try net.tcpConnectToAddress(cfg.addr);
         defer stream.close();
 
-        var buf: [1000000]u8 = undefined;
-
         var writer = stream.writer();
-        send_bytes = try writer.write(message);
-
-        rcv_bytes = try stream.read(&buf);
-        std.log.info("{d}: buf={s}", .{ time.milliTimestamp(), buf });
+        try writer.print("{s}\n", .{message});
     }
 
     if (cfg.verbose) {
         std.log.info("{d}: send_bytes={d}", .{ time.milliTimestamp(), send_bytes });
-        std.log.info("{d}: rcv_bytes={d}", .{ time.milliTimestamp(), rcv_bytes });
     }
 }
 

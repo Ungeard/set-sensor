@@ -34,8 +34,8 @@ const Args = struct {
     };
 
     udp: bool = false,
-    temp: u64 = 35000,
-    pwr1: u64 = 0,
+    temp: u64 = 35,
+    pwr1: u64 = 48,
     pwr2: u64 = 0,
     verbose: bool,
 
