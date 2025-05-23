@@ -1,10 +1,13 @@
-const Proto = enum {
-    tcp,
-    udp,
-};
+fn appendNewLine(allocator: Allocator, str: []u8) ![]u8 {
+    var buf: [100]u8 = undefined;
+    const fmt = try std.fmt.bufPrint(buf[0..], "{s}\n", .{str});
+    return allocator.dupe(u8, fmt);
+}
 
 fn sendToSensor(allocator: Allocator, cfg: SensorCfg, data: *SensorData) !void {
-    const message = try std.json.stringifyAlloc(allocator, data, .{ .escape_unicode = false });
+    const json_data = try std.json.stringifyAlloc(allocator, data, .{ .escape_unicode = false });
+    const message = try appendNewLine(allocator, json_data);
+    allocator.free(json_data);
 
     var send_bytes: usize = undefined;
 
@@ -19,7 +22,7 @@ fn sendToSensor(allocator: Allocator, cfg: SensorCfg, data: *SensorData) !void {
         defer stream.close();
 
         var writer = stream.writer();
-        try writer.print("{s}\n", .{message});
+        send_bytes = try writer.write(message);
     }
 
     if (cfg.verbose) {
@@ -32,18 +35,15 @@ pub fn main() !void {
     defer arena.deinit();
     const allocator = arena.allocator();
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-
-    const args = try std.process.argsAlloc(gpa.allocator());
-    defer std.process.argsFree(gpa.allocator(), args);
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
 
     const input = try flags.parser(args);
 
     var cfg: SensorCfg = undefined;
     const data = try SensorData.init(allocator);
 
-    data.sensor_data.temp = input.temp * 1000;
+    data.sensor_data.temp = input.temp * 0;
     data.sensor_data.pwr1 = input.pwr1;
     data.sensor_data.pwr2 = input.pwr2;
 
@@ -56,22 +56,19 @@ pub fn main() !void {
     }
 
     try sendToSensor(allocator, cfg, data);
-
-    //try sendToSensor(allocator, cfg, data);
 }
 
-const Names = enum {
-    temp,
-    pwr1,
-    pwr2,
+const Proto = enum {
+    tcp,
+    udp,
 };
 
 const SensorData = struct {
     sensor_data: Sensors,
 
     const Sensors = struct {
-        temp: u64 = 350,
-        pwr1: u64 = 48,
+        temp: u64 = 0,
+        pwr1: u64 = 0,
         pwr2: u64 = 0,
     };
 
@@ -95,6 +92,3 @@ const posix = std.posix;
 const net = std.net;
 const time = std.time;
 const Allocator = std.mem.Allocator;
-
-/// This imports the separate module containing `root.zig`. Take a look in `build.zig` for details.
-const lib = @import("set_sensor_lib");
