@@ -1,16 +1,36 @@
+const Proto = enum {
+    tcp,
+    udp,
+};
+
 fn sendToSensor(allocator: Allocator, cfg: SensorCfg, data: *SensorData) !void {
-    const sockfd = try posix.socket(posix.AF.INET, posix.SOCK.DGRAM | posix.SOCK.CLOEXEC, 0);
-    defer posix.close(sockfd);
-
-    try posix.connect(sockfd, &cfg.addr.any, cfg.addr.getOsSockLen());
-
     const message = try std.json.stringifyAlloc(allocator, data, .{});
+    var send_bytes: usize = undefined;
+    var rcv_bytes: usize = undefined;
 
-    const send_bytes = try posix.send(sockfd, message, 0);
-    if (cfg.verbose) {
-        std.log.info("{d}: send_bytes={d}", .{time.milliTimestamp(), send_bytes});
+    if (cfg.proto == Proto.udp) {
+        const sockfd = try posix.socket(posix.AF.INET, posix.SOCK.DGRAM | posix.SOCK.CLOEXEC, 0);
+        defer posix.close(sockfd);
+
+        try posix.connect(sockfd, &cfg.addr.any, cfg.addr.getOsSockLen());
+        send_bytes = try posix.send(sockfd, message, 0);
+    } else {
+        const stream = try net.tcpConnectToAddress(cfg.addr);
+        defer stream.close();
+
+        var buf: [1000000]u8 = undefined;
+
+        var writer = stream.writer();
+        send_bytes = try writer.write(message);
+
+        rcv_bytes = try stream.read(&buf);
+        std.log.info("{d}: buf={s}", .{ time.milliTimestamp(), buf });
     }
 
+    if (cfg.verbose) {
+        std.log.info("{d}: send_bytes={d}", .{ time.milliTimestamp(), send_bytes });
+        std.log.info("{d}: rcv_bytes={d}", .{ time.milliTimestamp(), rcv_bytes });
+    }
 }
 
 pub fn main() !void {
@@ -30,12 +50,23 @@ pub fn main() !void {
     const data = try SensorData.init(allocator);
 
     cfg.addr = try std.net.Address.resolveIp(input.positional.addr, input.positional.port);
-    cfg.verbose = true;
+    if (input.udp) {
+        cfg.proto = .udp;
+    }
+    if (input.verbose) {
+        cfg.verbose = true;
+    }
 
     try sendToSensor(allocator, cfg, data);
 
-    try sendToSensor(allocator, cfg, data);
+    //try sendToSensor(allocator, cfg, data);
 }
+
+const Names = enum {
+    temp,
+    pwr1,
+    pwr2,
+};
 
 const SensorData = struct {
     sensor_data: Sensors,
@@ -56,9 +87,9 @@ const SensorData = struct {
 
 const SensorCfg = struct {
     addr: std.net.Address,
+    proto: Proto = .tcp,
     verbose: bool,
 };
-
 
 const std = @import("std");
 const flags = @import("flags.zig");

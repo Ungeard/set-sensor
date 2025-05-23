@@ -14,7 +14,6 @@ pub fn parser(args: [][:0]u8) !Args {
         );
 
         std.posix.exit(1);
-
     };
 
     return result;
@@ -27,29 +26,34 @@ const Args = struct {
     ;
 
     pub const descriptions = .{
-        .verbose =
-            \\ Verbose output selection.
+        .udp = "Select to use udp as the sending protocol.",
+        .temp = "Select temperature value.",
+        .pwr1 = "Select power input value for input1.",
+        .pwr2 = "Select power input value for input2.",
+        .verbose = "Verbose output.",
     };
 
+    udp: bool = false,
+    temp: u16 = 35,
+    pwr1: u16 = 0,
+    pwr2: u16 = 0,
+    verbose: bool,
+
     positional: struct {
-        addr : []const u8 = "127.0.0.1",
+        addr: []const u8 = "127.0.0.1",
         port: u16 = 7200,
 
         pub const descriptions = .{
             .addr = "Address where the sensor can be reached.",
-            .port = "Port that is used to communicate with sensor.", 
+            .port = "Port that is used to communicate with sensor.",
         };
     },
 
-    verbose: bool,
-
-    command: union(enum) {
-
-    },
+    command: union(enum) {},
     pub const switches = .{
         .verbose = 'V',
+        .udp = 'u',
     };
-
 };
 
 const ArgIter = std.process.ArgIterator;
