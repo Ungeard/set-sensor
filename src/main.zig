@@ -5,6 +5,7 @@ const Proto = enum {
 
 fn sendToSensor(allocator: Allocator, cfg: SensorCfg, data: *SensorData) !void {
     const message = try std.json.stringifyAlloc(allocator, data, .{});
+
     var send_bytes: usize = undefined;
     var rcv_bytes: usize = undefined;
 
@@ -49,6 +50,10 @@ pub fn main() !void {
     var cfg: SensorCfg = undefined;
     const data = try SensorData.init(allocator);
 
+    data.sensor_data.temp = input.temp * 10;
+    data.sensor_data.pwr1 = input.pwr1;
+    data.sensor_data.pwr2 = input.pwr2;
+
     cfg.addr = try std.net.Address.resolveIp(input.positional.addr, input.positional.port);
     if (input.udp) {
         cfg.proto = .udp;
@@ -72,9 +77,9 @@ const SensorData = struct {
     sensor_data: Sensors,
 
     const Sensors = struct {
-        temp: u16 = 25,
-        pwr1: u16 = 30,
-        pwr2: u16 = 0,
+        temp: u64 = 350,
+        pwr1: u64 = 48,
+        pwr2: u64 = 0,
     };
 
     fn init(allocator: Allocator) !*SensorData {
